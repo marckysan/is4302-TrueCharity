@@ -23,6 +23,14 @@ contract SuperApp {
         bool isValid;
     }
 
+    // TODO: Implement store structure so that ownership of mapping can be transferred
+    // struct store {
+    //     categoryMapping;
+    //     string name;
+    //     address owner;
+    //     address prevOwner;
+    // }
+
     item public firstItem;
     category public firstCategory;
     mapping(bytes32 => category) public categoryMapping;
@@ -89,6 +97,9 @@ contract SuperApp {
         categoryMapping[categoryKey] = newCategory;
     }
 
+    // TODO: Update category method (name, min bid, validity --> Can invalidate it for archival purposes)
+    function updateCategory() public {}
+
     function deleteCategory(string memory _categoryName) public {
         bytes32 categoryKey = stringAsKeyContract.convert(_categoryName);
         require(
@@ -136,6 +147,9 @@ contract SuperApp {
         }
     }
 
+    // TODO: Update item method (name, category, min price, validity --> Can invalidate it for archival purposes etc)
+    function updateItem(string memory _categoryName) public {}
+
     function deleteItem(
         string memory _itemName,
         string memory _categoryName
@@ -180,12 +194,6 @@ contract SuperApp {
         }
     }
 
-    // //transfer ownership to new owner
-    // function transfer(
-    //     uint256 diceId,
-    //     address newOwner
-    // ) public ownerOnly(diceId) validDiceId(diceId) {
-    //     dices[diceId].prevOwner = dices[diceId].owner;
-    //     dices[diceId].owner = newOwner;
-    // }
+    // TODO: Transfer mapping ownership to marketplace through implementation of store strucutre
+    function transfer(address newOwner) public {}
 }
