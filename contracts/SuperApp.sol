@@ -4,6 +4,10 @@ import "./CharityToken.sol";
 import "./StringAsKey.sol";
 
 contract SuperApp {
+    address owner;
+    CharityToken charityTokenContract;
+    mapping(string => category) private categoryMapping;
+
     struct item {
         string itemName;
         uint256 minPriceInCT;
@@ -14,7 +18,7 @@ contract SuperApp {
     }
 
     struct category {
-        mapping(bytes32 => item) items;
+        mapping(string => item) items;
         string[] itemNames;
         uint256 categoryMinBidinCT;
         string categoryName;
@@ -31,83 +35,61 @@ contract SuperApp {
     //     address prevOwner;
     // }
 
-    item public firstItem;
-    category public firstCategory;
-    mapping(bytes32 => category) public categoryMapping;
-
     // event itemAdded(string cat, item newItem);
     // event itemRemoved(string cat, item existingItem);
 
-    CharityToken charityTokenContract;
-    StringAsKey stringAsKeyContract;
-
     // Initialise the superapp with the requirement that it must have at least 1 category with 1 item
     constructor(
-        CharityToken charityTokenAddress,
-        StringAsKey stringAsKeyAddress,
-        string memory _firstCategory,
-        string memory _firstItem,
-        uint256 _itemMinPrice
+        CharityToken charityTokenAddress
     ) public {
         charityTokenContract = charityTokenAddress;
-        stringAsKeyContract = stringAsKeyAddress;
-        bytes32 firstCategoryKey = stringAsKeyContract.convert(_firstCategory);
-        bytes32 firstItemKey = stringAsKeyContract.convert(_firstItem);
-
-        firstItem = item(
-            _firstItem,
-            _itemMinPrice,
-            _firstCategory,
-            address(this),
-            address(0),
-            true
-        );
-
-        string[] memory itemArr = new string[](1);
-        itemArr[0] = _firstItem;
-        firstCategory = category(
-            itemArr,
-            _itemMinPrice,
-            _firstCategory,
-            address(this),
-            address(0),
-            true
-        );
-        firstCategory.items[firstItemKey] = firstItem;
-        categoryMapping[firstCategoryKey] = firstCategory;
+        owner = msg.sender; // setting owner to be the superapp POC
     }
 
-    function addCategory(string memory _categoryName) public {
-        bytes32 categoryKey = stringAsKeyContract.convert(_categoryName);
-
-        require(
-            !categoryMapping[categoryKey].isValid,
-            "Category already exists, please update the category instead."
-        );
-
-        string[] memory itemArr = new string[](1);
-        category memory newCategory = category(
-            itemArr,
-            0,
-            _categoryName,
-            address(this),
-            address(0),
-            true
-        );
-        categoryMapping[categoryKey] = newCategory;
+    // modifiers
+    // modifier to ensure only owner of contract can invoke function
+    modifier ownerOnly() {
+        require(msg.sender == owner, "Only the owner of the contract can call this function");
+        _;
     }
 
-    // TODO: Update category method (name, min bid, validity --> Can invalidate it for archival purposes)
-    function updateCategory() public {}
-
-    function deleteCategory(string memory _categoryName) public {
-        bytes32 categoryKey = stringAsKeyContract.convert(_categoryName);
+    // functions
+    function addCategory(string memory _categoryName) public ownerOnly() {
         require(
-            categoryMapping[categoryKey].isValid,
+            !categoryMapping[_categoryName].isValid,
+            "Category already exists, please update the category instead"
+        );
+
+        category memory c;
+        c.categoryMinBidinCT = 0;
+        c.categoryName = _categoryName;
+        c.owner = address(this);
+        c.prevOwner = address(0);
+        c.isValid = true;
+
+        categoryMapping[_categoryName] = c;
+    }
+
+    function getCategoryName(string memory _categoryName) view public returns (string memory) {
+        require(categoryMapping[_categoryName].isValid, "The requested category does not exist");
+
+        return categoryMapping[_categoryName].categoryName;
+    }
+
+    function updateCategoryName(string memory _categoryName, string memory newName) public ownerOnly() {
+        require(categoryMapping[_categoryName].isValid, "The requested category does not exist, it cannot be updated");
+        require(!categoryMapping[newName].isValid, "The new name is already used");
+
+        categoryMapping[_categoryName].categoryName = newName;
+    }
+
+    function deleteCategory(string memory _categoryName) public ownerOnly() {
+        require(
+            categoryMapping[_categoryName].isValid,
             "The requested category does not exist, it cannot be deleted."
         );
 
-        delete categoryMapping[categoryKey];
+        delete categoryMapping[_categoryName];
     }
 
     function addItem(
@@ -115,15 +97,13 @@ contract SuperApp {
         uint256 _itemMinPriceInCT,
         string memory _categoryName
     ) public {
-        bytes32 categoryKey = stringAsKeyContract.convert(_categoryName);
-        bytes32 itemKey = stringAsKeyContract.convert(_itemName);
         require(_itemMinPriceInCT > 0, "Item cannot be free");
         require(
-            categoryMapping[categoryKey].isValid,
+            categoryMapping[_categoryName].isValid,
             "The requested category does not exist, please create it first."
         );
         require(
-            !categoryMapping[categoryKey].items[itemKey].isValid,
+            !categoryMapping[_categoryName].items[_itemName].isValid,
             "Item already exists, please update the item instead."
         );
 
@@ -137,63 +117,63 @@ contract SuperApp {
             true
         );
 
-        categoryMapping[categoryKey].items[itemKey] = newItem;
-        categoryMapping[categoryKey].itemNames.push(_itemName);
+        categoryMapping[_categoryName].items[_itemName] = newItem;
+        categoryMapping[_categoryName].itemNames.push(_itemName);
 
         // Update category min bid if the item price is higher than curr min bid
-        uint256 currMinBid = categoryMapping[categoryKey].categoryMinBidinCT;
-        if (currMinBid < _itemMinPriceInCT) {
-            categoryMapping[categoryKey].categoryMinBidinCT = _itemMinPriceInCT;
+        uint256 currMinBid = categoryMapping[_categoryName].categoryMinBidinCT;
+        if (currMinBid > _itemMinPriceInCT) {
+            categoryMapping[_categoryName].categoryMinBidinCT = _itemMinPriceInCT;
         }
     }
 
     // TODO: Update item method (name, category, min price, validity --> Can invalidate it for archival purposes etc)
-    function updateItem(string memory _categoryName) public {}
+    function updateItem(string memory _itemName, uint256 minPriceInCT, bool isValid) public {
+    }
 
     function deleteItem(
         string memory _itemName,
         string memory _categoryName
     ) public {
-        bytes32 categoryKey = stringAsKeyContract.convert(_categoryName);
-        bytes32 itemKey = stringAsKeyContract.convert(_itemName);
         require(
-            categoryMapping[categoryKey].items[itemKey].isValid,
+            categoryMapping[_categoryName].items[_itemName].isValid,
             "Item does not exists in the category, please delete a valid item instead."
         );
 
         // Delete the item
-        uint256 itemMinPrice = categoryMapping[categoryKey]
-            .items[itemKey]
+        uint256 itemMinPrice = categoryMapping[_categoryName]
+            .items[_itemName]
             .minPriceInCT;
-        delete categoryMapping[categoryKey].items[itemKey];
+        delete categoryMapping[_categoryName].items[_itemName];
 
         // Update the category min bid
-        if (categoryMapping[categoryKey].categoryMinBidinCT == itemMinPrice) {
+        if (categoryMapping[_categoryName].categoryMinBidinCT == itemMinPrice) {
             uint256 minPrice = 10000000000000000;
-            uint256 length = categoryMapping[categoryKey].itemNames.length;
+            uint256 length = categoryMapping[_categoryName].itemNames.length;
             for (uint256 i = 0; i < length; i++) {
-                bytes32 indexName = stringAsKeyContract.convert(
-                    categoryMapping[categoryKey].itemNames[i]
-                );
-                if (indexName == itemKey) {
-                    string[] storage itemsArr = categoryMapping[categoryKey]
+                string memory indexName = categoryMapping[_categoryName].itemNames[i];
+                /* solidity does not take string as a primitive type, 
+                so we have to hash both strings and compare the result as follows */
+                if (keccak256(abi.encodePacked(indexName)) == keccak256(abi.encodePacked(_itemName))) {
+                    string[] storage itemsArr = categoryMapping[_categoryName]
                         .itemNames;
                     itemsArr[i] = itemsArr[itemsArr.length - 1];
                     itemsArr.pop();
-                    categoryMapping[categoryKey].itemNames = itemsArr;
+                    categoryMapping[_categoryName].itemNames = itemsArr;
                 } else {
-                    uint256 itemIteratedPrice = categoryMapping[categoryKey]
-                        .items[itemKey]
+                    uint256 itemIteratedPrice = categoryMapping[_categoryName]
+                        .items[_itemName]
                         .minPriceInCT;
                     if (itemIteratedPrice < minPrice) {
                         minPrice = itemIteratedPrice;
                     }
                 }
             }
-            categoryMapping[categoryKey].categoryMinBidinCT = minPrice;
+            categoryMapping[_categoryName].categoryMinBidinCT = minPrice;
         }
     }
 
     // TODO: Transfer mapping ownership to marketplace through implementation of store strucutre
-    function transfer(address newOwner) public {}
+    function transfer(address newOwner) public {
+    }
 }
