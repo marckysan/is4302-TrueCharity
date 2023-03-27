@@ -7,10 +7,11 @@ contract SuperApp {
     address owner;
     CharityToken charityTokenContract;
     mapping(string => category) private categoryMapping;
+    mapping(string => item) private itemMapping;
 
     struct item {
         string itemName;
-        uint256 minPriceInCT;
+        uint256 priceinCT;
         string itemCategory;
         address owner;
         address prevOwner;
@@ -21,6 +22,7 @@ contract SuperApp {
         mapping(string => item) items;
         string[] itemNames;
         uint256 categoryMinBidinCT;
+        uint256 minItemPriceinCT;
         string categoryName;
         address owner;
         address prevOwner;
@@ -54,7 +56,7 @@ contract SuperApp {
     }
 
     // functions
-    function addCategory(string memory _categoryName) public ownerOnly() {
+    function addCategory(string memory _categoryName) public ownerOnly() returns (bool) {
         require(
             !categoryMapping[_categoryName].isValid,
             "Category already exists, please update the category instead"
@@ -62,18 +64,15 @@ contract SuperApp {
 
         category memory c;
         c.categoryMinBidinCT = 0;
+        c.minItemPriceinCT = 0;
         c.categoryName = _categoryName;
         c.owner = address(this);
         c.prevOwner = address(0);
         c.isValid = true;
 
         categoryMapping[_categoryName] = c;
-    }
 
-    function getCategoryName(string memory _categoryName) view public returns (string memory) {
-        require(categoryMapping[_categoryName].isValid, "The requested category does not exist");
-
-        return categoryMapping[_categoryName].categoryName;
+        return true;
     }
 
     function updateCategoryName(string memory _categoryName, string memory newName) public ownerOnly() {
@@ -83,52 +82,112 @@ contract SuperApp {
         categoryMapping[_categoryName].categoryName = newName;
     }
 
-    function deleteCategory(string memory _categoryName) public ownerOnly() {
+    function deleteCategory(string memory _categoryName) public ownerOnly() returns (bool) {
         require(
             categoryMapping[_categoryName].isValid,
-            "The requested category does not exist, it cannot be deleted."
+            "The requested category does not exist, it cannot be deleted"
         );
 
         delete categoryMapping[_categoryName];
+
+        return true;
     }
 
     function addItem(
         string memory _itemName,
-        uint256 _itemMinPriceInCT,
+        uint256 _priceInCT,
         string memory _categoryName
-    ) public {
-        require(_itemMinPriceInCT > 0, "Item cannot be free");
+    ) public ownerOnly() returns (bool) {
+        require(_priceInCT > 0, "Item's min price needs to be more than 0 Charity Token");
         require(
             categoryMapping[_categoryName].isValid,
-            "The requested category does not exist, please create it first."
+            "The requested category does not exist, please create it first"
         );
         require(
             !categoryMapping[_categoryName].items[_itemName].isValid,
-            "Item already exists, please update the item instead."
+            "Item already exists in the category, please update the item instead"
         );
 
         // Create and add new item into the category
         item memory newItem = item(
             _itemName,
-            _itemMinPriceInCT,
+            _priceInCT,
             _categoryName,
             address(this),
             address(0),
             true
         );
 
-        categoryMapping[_categoryName].items[_itemName] = newItem;
-        categoryMapping[_categoryName].itemNames.push(_itemName);
+        category storage c = categoryMapping[_categoryName];
 
-        // Update category min bid if the item price is higher than curr min bid
-        uint256 currMinBid = categoryMapping[_categoryName].categoryMinBidinCT;
-        if (currMinBid > _itemMinPriceInCT) {
-            categoryMapping[_categoryName].categoryMinBidinCT = _itemMinPriceInCT;
+        // update minimum item price of category
+        if (c.itemNames.length <= 0) {
+            // if category does not have any items yet
+            c.minItemPriceinCT = _priceInCT;
+        } else {
+            if (_priceInCT < c.minItemPriceinCT) {
+                c.minItemPriceinCT = _priceInCT;
+            }
+        }
+
+        c.items[_itemName] = newItem;
+        c.itemNames.push(_itemName);
+        itemMapping[_itemName] = newItem;
+
+        return true;
+    }
+
+    function updateCategoryItem(string memory _categoryName, item memory updatedItem) private {
+        category storage c = categoryMapping[_categoryName];
+        c.items[updatedItem.itemName] = updatedItem;
+        if (updatedItem.priceinCT < c.minItemPriceinCT) {
+            c.minItemPriceinCT = updatedItem.priceinCT;
         }
     }
 
-    // TODO: Update item method (name, category, min price, validity --> Can invalidate it for archival purposes etc)
-    function updateItem(string memory _itemName, uint256 minPriceInCT, bool isValid) public {
+    // function overloading for updateItem to allow "optional" parameters
+    function updateItem(string memory _itemName, uint256 _newPriceinCT) public ownerOnly() returns (bool){
+        require(_newPriceinCT > 0, "New price must be more than 0 Charity Token");
+        require(itemMapping[_itemName].isValid, "Item does not exist");
+
+        string memory categoryOfItem = itemMapping[_itemName].itemCategory;
+        item memory updatedItem = itemMapping[_itemName];
+        updatedItem.priceinCT = _newPriceinCT;
+        itemMapping[_itemName] = updatedItem;
+        updateCategoryItem(categoryOfItem, updatedItem);
+
+        return true;
+    }
+
+    function updateItem(string memory _itemName, uint256 _newPriceinCT, bool isValid) public ownerOnly() returns (bool) {
+        require(_newPriceinCT > 0, "New price must be more than 0 Charity Token");
+        require(itemMapping[_itemName].isValid, "Item does not exist");
+
+        string memory categoryOfItem = itemMapping[_itemName].itemCategory;
+        item memory updatedItem = itemMapping[_itemName];
+        updatedItem.priceinCT = _newPriceinCT;
+        updatedItem.isValid = isValid;
+        itemMapping[_itemName] = updatedItem;
+        updateCategoryItem(categoryOfItem, updatedItem);
+
+        return true;
+    }
+
+    // // TODO: Update item method (name, category, min price, validity --> Can invalidate it for archival purposes etc)
+    function updateItem(string memory _itemName, uint256 _newPriceinCT, bool isValid, string memory _newName) public ownerOnly() returns (bool) {
+        require(_newPriceinCT > 0, "New price must be more than 0 Charity Token");
+        require(itemMapping[_itemName].isValid, "Item does not exist");
+        require(!itemMapping[_newName].isValid, "Item's name already exists, use another name");
+
+        string memory categoryOfItem = itemMapping[_itemName].itemCategory;
+        item memory updatedItem = itemMapping[_itemName];
+        updatedItem.priceinCT = _newPriceinCT;
+        updatedItem.isValid = isValid;
+        updatedItem.itemName = _newName;
+        itemMapping[_itemName] = updatedItem;
+        updateCategoryItem(categoryOfItem, updatedItem);
+
+        return true;
     }
 
     function deleteItem(
@@ -143,7 +202,7 @@ contract SuperApp {
         // Delete the item
         uint256 itemMinPrice = categoryMapping[_categoryName]
             .items[_itemName]
-            .minPriceInCT;
+            .priceinCT;
         delete categoryMapping[_categoryName].items[_itemName];
 
         // Update the category min bid
@@ -163,7 +222,7 @@ contract SuperApp {
                 } else {
                     uint256 itemIteratedPrice = categoryMapping[_categoryName]
                         .items[_itemName]
-                        .minPriceInCT;
+                        .priceinCT;
                     if (itemIteratedPrice < minPrice) {
                         minPrice = itemIteratedPrice;
                     }
