@@ -1,41 +1,35 @@
 pragma solidity ^0.5.0;
 
 import "./CharityToken.sol";
-import "./StringAsKey.sol";
 
 contract SuperApp {
     address owner;
     CharityToken charityTokenContract;
     mapping(string => category) private categoryMapping;
     mapping(string => item) private itemMapping;
+    store private s;
 
     struct item {
         string itemName;
         uint256 priceinCT;
         string itemCategory;
-        address owner;
-        address prevOwner;
         bool isValid;
     }
 
     struct category {
         mapping(string => item) items;
         string[] itemNames;
-        uint256 categoryMinBidinCT;
         uint256 minItemPriceinCT;
         string categoryName;
-        address owner;
-        address prevOwner;
         bool isValid;
     }
 
     // TODO: Implement store structure so that ownership of mapping can be transferred
-    // struct store {
-    //     categoryMapping;
-    //     string name;
-    //     address owner;
-    //     address prevOwner;
-    // }
+    struct store {
+        mapping(string => category) categories;
+        address owner;
+        address prevOwner;
+    }
 
     // event itemAdded(string cat, item newItem);
     // event itemRemoved(string cat, item existingItem);
@@ -46,6 +40,7 @@ contract SuperApp {
     ) public {
         charityTokenContract = charityTokenAddress;
         owner = msg.sender; // setting owner to be the superapp POC
+        s = store(address(0), owner); // Initialise the store
     }
 
     // modifiers
@@ -56,6 +51,15 @@ contract SuperApp {
     }
 
     // functions
+    function updateStoreCategory(string memory _categoryName, category memory updatedCategory) private {
+        s.categories[_categoryName] = updatedCategory;
+    }
+
+    function deleteStoreCategory(string memory _categoryName) private {
+        delete s.categories[_categoryName];
+    }
+
+    
     function addCategory(string memory _categoryName) public ownerOnly() returns (bool) {
         require(
             !categoryMapping[_categoryName].isValid,
@@ -63,14 +67,12 @@ contract SuperApp {
         );
 
         category memory c;
-        c.categoryMinBidinCT = 0;
         c.minItemPriceinCT = 0;
         c.categoryName = _categoryName;
-        c.owner = address(this);
-        c.prevOwner = address(0);
         c.isValid = true;
 
         categoryMapping[_categoryName] = c;
+        updateStoreCategory(_categoryName, c);
 
         return true;
     }
@@ -80,6 +82,9 @@ contract SuperApp {
         require(!categoryMapping[newName].isValid, "The new name is already used");
 
         categoryMapping[_categoryName].categoryName = newName;
+        category memory c = categoryMapping[_categoryName];
+
+        updateStoreCategory(_categoryName, c);
     }
 
     function deleteCategory(string memory _categoryName) public ownerOnly() returns (bool) {
@@ -89,6 +94,7 @@ contract SuperApp {
         );
 
         delete categoryMapping[_categoryName];
+        deleteStoreCategory(_categoryName);
 
         return true;
     }
@@ -113,8 +119,6 @@ contract SuperApp {
             _itemName,
             _priceInCT,
             _categoryName,
-            address(this),
-            address(0),
             true
         );
 
@@ -134,15 +138,19 @@ contract SuperApp {
         c.itemNames.push(_itemName);
         itemMapping[_itemName] = newItem;
 
+        updateStoreCategory(_categoryName, c);
+
         return true;
     }
 
     function updateCategoryItem(string memory _categoryName, item memory updatedItem) private {
         category storage c = categoryMapping[_categoryName];
         c.items[updatedItem.itemName] = updatedItem;
-        if (updatedItem.priceinCT < c.minItemPriceinCT) {
+        if (updatedItem.priceinCT < c.minItemPriceinCT) { 
             c.minItemPriceinCT = updatedItem.priceinCT;
         }
+
+        updateStoreCategory(_categoryName, c);
     }
 
     // function overloading for updateItem to allow "optional" parameters
@@ -193,7 +201,7 @@ contract SuperApp {
     function deleteItem(
         string memory _itemName,
         string memory _categoryName
-    ) public {
+    ) public ownerOnly()  {
         require(
             categoryMapping[_categoryName].items[_itemName].isValid,
             "Item does not exists in the category, please delete a valid item instead."
@@ -206,7 +214,7 @@ contract SuperApp {
         delete categoryMapping[_categoryName].items[_itemName];
 
         // Update the category min bid
-        if (categoryMapping[_categoryName].categoryMinBidinCT == itemMinPrice) {
+        if (categoryMapping[_categoryName].minItemPriceinCT == itemMinPrice) {
             uint256 minPrice = 10000000000000000;
             uint256 length = categoryMapping[_categoryName].itemNames.length;
             for (uint256 i = 0; i < length; i++) {
@@ -228,11 +236,14 @@ contract SuperApp {
                     }
                 }
             }
-            categoryMapping[_categoryName].categoryMinBidinCT = minPrice;
+            categoryMapping[_categoryName].minItemPriceinCT = minPrice;
         }
+        updateStoreCategory(_categoryName, categoryMapping[_categoryName]);
     }
 
-    // TODO: Transfer mapping ownership to marketplace through implementation of store strucutre
-    function transfer(address newOwner) public {
+    // Transfer mapping ownership to marketplace through implementation of store strucutre
+    function transfer(address newOwner) public ownerOnly() {
+        s.prevOwner = owner;
+        s.owner = newOwner;
     }
 }
