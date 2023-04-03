@@ -19,7 +19,7 @@ contract("SuperApp", function (accounts) {
   it("Add Category (Not Owner)", async () => {
     truffleAssert.reverts(
       superAppInstance.addCategory("Meat", { from: accounts[1] }),
-      "Only the owner of the contract can call this function"
+      "Only the owner of the superapp contract can call this function"
     );
   });
 

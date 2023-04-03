@@ -55,7 +55,7 @@ contract SuperApp {
     modifier ownerOnly() {
         require(
             msg.sender == owner,
-            "Only the owner of the contract can call this function"
+            "Only the owner of the superapp contract can call this function"
         );
         _;
     }
@@ -320,6 +320,11 @@ contract SuperApp {
     function transfer(address newOwner) public ownerOnly {
         s.prevOwner = owner;
         s.owner = newOwner;
+        owner = newOwner;
+    }
+
+    function getCategoryList() public view returns (string[] memory) {
+        return s.categoryNames;
     }
 
     function getOwner() public view returns (address) {
@@ -330,13 +335,15 @@ contract SuperApp {
         return s.prevOwner;
     }
 
-    function getCategoryNames() public view returns (string[] memory) {
-        return s.categoryNames;
-    }
-
     function getCategoryMinPrice(
-        string memory _categoryName
-    ) public view ownerOnly returns (uint256) {
+        string memory _categoryName,
+        address _callerAddress
+    ) public view returns (uint256) {
+        // Additional check to ensure that only either superapp owner or marketplace owner can call this
+        require(
+            _callerAddress == owner || _callerAddress == s.owner,
+            "Not authorised to fetch category minimum price."
+        );
         return categoryMapping[_categoryName].minItemPriceinCT;
     }
 }

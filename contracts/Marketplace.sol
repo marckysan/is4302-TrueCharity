@@ -33,6 +33,8 @@ contract Marketplace {
     event buyCredit(uint256 ctAmount); // event of minting of CT to the msg.sender
     event returnCredits(uint256 ctAmount); // event of returning of CT of the msg.sender
     event biddingInitiated(); // event of initiating bidding
+    event categoriesRetrieved(string[] categoryList);
+    event getOwnerEvent(address owner);
 
     mapping(string => uint256) private minBidAmount; // Min bid for each category as set out by marketplace POC
     string[] private categoryList;
@@ -42,7 +44,15 @@ contract Marketplace {
     modifier ownerOnly() {
         require(
             msg.sender == owner,
-            "Only the owner of the contract can call this function"
+            "Only the owner of the marketplace contract can call this function"
+        );
+        _;
+    }
+
+    modifier biddersOnly() {
+        require(
+            msg.sender != owner,
+            "Only the bidders can get, check and return Charity Tokens"
         );
         _;
     }
@@ -50,7 +60,9 @@ contract Marketplace {
     // functions
     // For marketplace and public to view what categories are available
     function getCategories() public returns (string[] memory) {
-        categoryList = superAppContract.getCategoryNames();
+        categoryList = superAppContract.getCategoryList();
+
+        emit categoriesRetrieved(categoryList);
         return categoryList;
     }
 
@@ -67,7 +79,7 @@ contract Marketplace {
 
         for (uint256 i = 0; i < categoryList.length; i++) {
             minBidAmount[categoryList[i]] = superAppContract
-                .getCategoryMinPrice(categoryList[i]);
+                .getCategoryMinPrice(categoryList[i], owner);
             categoriesIsExist[categoryList[i]] = true;
         }
     }
@@ -100,24 +112,32 @@ contract Marketplace {
         status = MarketplaceState.open;
     }
 
+    function getStatus() public view biddersOnly returns (MarketplaceState) {
+        return status;
+    }
+
     // Functions for bidders
-    function getCT() public payable {
+    function getCT() public payable biddersOnly {
         require(msg.value >= 1E16, "At least 0.01ETH needed to get DT");
         charityTokenContract.getCredit(msg.sender, msg.value);
         emit buyCredit(msg.value / 1E16);
     }
 
-    function checkCT() public view returns (uint256) {
+    function checkCT() public view biddersOnly returns (uint256) {
         uint256 remainValue = charityTokenContract.checkCredit(msg.sender);
         return remainValue;
     }
 
-    function returnCT() public {
-        uint256 toRetInCT = checkCT();
-        charityTokenContract.transferCredit(address(this), toRetInCT);
+    function returnCT(uint256 CTToReturn) public biddersOnly {
+        uint256 balance = checkCT();
+        require(
+            balance > CTToReturn,
+            "You do not have sufficient Charity Tokens to return"
+        );
+        charityTokenContract.transferCredit(address(this), CTToReturn);
         address payable recipient = address(msg.sender);
-        uint256 toRetInWei = toRetInCT * 10000000000000000;
+        uint256 toRetInWei = CTToReturn * 10000000000000000;
         recipient.transfer(toRetInWei);
-        emit returnCredits(toRetInCT);
+        emit returnCredits(CTToReturn);
     }
 }
