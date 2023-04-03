@@ -1,0 +1,28 @@
+{
+  "name": "is4302-truecharity",
+  "version": "1.0.0",
+  "description": "A blockchain-based platform for secure and transparent charity donation tracking, where donors can track the progress and impact of their donations and ensure that their contributions are being used for the intended purpose.",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marckysan/is4302-TrueCharity.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/marckysan/is4302-TrueCharity/issues"
+  },
+  "homepage": "https://github.com/marckysan/is4302-TrueCharity#readme",
+  "dependencies": {
+    "hardhat": "^2.13.0",
+    "keccak256": "^1.0.6",
+    "truffle": "^5.8.1",
+    "truffle-assertions": "^0.9.2"
+  }
+}
