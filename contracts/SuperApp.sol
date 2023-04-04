@@ -80,13 +80,16 @@ contract SuperApp {
         }
     }
 
-    function addItem(string memory _itemName, uint256 _priceInCT) private {
+    function addItem(
+        string memory _itemName,
+        uint256 _priceInCT
+    ) public ownerOnly {
         require(
             _priceInCT > 0,
             "Item's min price needs to be more than 0 Charity Token"
         );
         require(
-            itemMapping[_itemName].priceinCT != 0,
+            itemMapping[_itemName].priceinCT == 0,
             "Item already exists, please update the item instead"
         );
 
@@ -95,43 +98,52 @@ contract SuperApp {
         itemMapping[_itemName] = newItem;
         updateItemIndexArrMapping(
             _itemName,
-            itemsList.length + 1,
+            itemsList.length,
             UpdateFunction.add
         );
         emit itemAdded(_itemName);
     }
 
-    // function overloading for updateItem to allow "optional" parameters
-    function updateItem(
+    function updateItemName(
         string memory _itemName,
         string memory _newItemName
-    ) private {
+    ) public ownerOnly {
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
+        require(
+            itemMapping[_newItemName].priceinCT == 0,
+            "The new name is already used"
+        );
 
         item memory updatedItem = itemMapping[_itemName];
         updatedItem.itemName = _newItemName;
-        delete itemMapping[_itemName];
+
         itemMapping[_newItemName] = updatedItem;
+        uint256 oldItemIndex = itemIndexMapping[_itemName];
+        delete itemMapping[_itemName];
 
         updateItemIndexArrMapping(
             _itemName,
             _newItemName,
-            itemIndexMapping[_itemName],
+            oldItemIndex,
             UpdateFunction.update
         );
 
         emit itemNameUpdated(_itemName, _newItemName);
     }
 
-    function updateItem(
+    function updateItemPrice(
         string memory _itemName,
         uint256 _newPriceinCT
-    ) private {
+    ) public ownerOnly {
         require(
             _newPriceinCT > 0,
             "New price must be more than 0 Charity Token"
         );
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
+        require(
+            itemMapping[_itemName].priceinCT != _newPriceinCT,
+            "Item price did not change"
+        );
 
         item memory updatedItem = itemMapping[_itemName];
         uint256 oldPrice = updatedItem.priceinCT;
@@ -141,7 +153,7 @@ contract SuperApp {
         emit itemPriceUpdated(_itemName, oldPrice, _newPriceinCT);
     }
 
-    function deleteItem(string memory _itemName) private {
+    function deleteItem(string memory _itemName) public ownerOnly {
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
 
         delete itemMapping[_itemName];

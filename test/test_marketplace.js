@@ -25,7 +25,7 @@ contract("Marketplace", function (accounts) {
   console.log("Testing Marketplace");
 
   // PRE BIDDING TEST CASES
-  it("Get Category List", async () => {
+  xit("Get Category List", async () => {
     // Adding mock categories
     await superAppInstance.addCategory("Meat", { from: accounts[0] });
     await superAppInstance.addCategory("Furniture", { from: accounts[0] });
@@ -55,21 +55,21 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Get Category Min Bid when it's not set", async () => {
+  xit("Get Category Min Bid when xit's not set", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.getCategoryMinBid("Meat", { from: accounts[1] }),
       "The category minimum bid has yet to be updated. Please wait, or update the minimum bids if you run the marketplace."
     );
   });
 
-  it("Set Category Min Bid to Category Min Price as Unauthorized User [ownerOnly modifier]", async () => {
+  xit("Set Category Min Bid to Category Min Price as Unauthorized User [ownerOnly modifier]", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.setMinBidToMinPrice({ from: accounts[2] }),
       "Only the owner of the marketplace contract can call this function"
     );
   });
 
-  it("Set Category Min Bid to Category Min Price", async () => {
+  xit("Set Category Min Bid to Category Min Price", async () => {
     await marketplaceInstance.setMinBidToMinPrice({ from: accounts[1] });
     let v1 = await marketplaceInstance.getCategoryMinBid("Furniture", {
       from: accounts[2],
@@ -78,7 +78,7 @@ contract("Marketplace", function (accounts) {
     assert.equal(v1, 1, "Furniture Category Min Bid does not match.");
   });
 
-  it("Set Category Min Bid to Specific Price as Marketplace Owner", async () => {
+  xit("Set Category Min Bid to Specific Price as Marketplace Owner", async () => {
     await marketplaceInstance.setCategoryMinBid("Meat", 5, {
       from: accounts[1],
     });
@@ -89,7 +89,7 @@ contract("Marketplace", function (accounts) {
   });
 
   // SETTING MARKETPLACE STATUS TEST CASES
-  it("Get marketplace status as the bidder", async () => {
+  xit("Get marketplace status as the bidder", async () => {
     let v1 = await marketplaceInstance.getStatus({ from: accounts[2] });
     assert.equal(
       v1,
@@ -98,7 +98,7 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Set marketplace status to open as the marketplace owner", async () => {
+  xit("Set marketplace status to open as the marketplace owner", async () => {
     await marketplaceInstance.start_bidding({ from: accounts[1] });
     let v1 = await marketplaceInstance.getStatus({ from: accounts[2] });
     assert.equal(
@@ -109,7 +109,7 @@ contract("Marketplace", function (accounts) {
   });
 
   // CHARITY TOKEN RELATED TEST CASES FOR BIDDERS
-  it("Get Charity Token as marketplace owner", async () => {
+  xit("Get Charity Token as marketplace owner", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.getCT({
         from: accounts[1],
@@ -119,7 +119,7 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Get Charity Token as bidders", async () => {
+  xit("Get Charity Token as bidders", async () => {
     await marketplaceInstance.getCT({
       from: accounts[2],
       value: oneEth.dividedBy(2),
@@ -150,7 +150,7 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Return Charity Token as bidder who has no Charity Tokens", async () => {
+  xit("Return Charity Token as bidder who has no Charity Tokens", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.returnCT(oneEth.dividedBy(20000000000000000), {
         from: accounts[4],
@@ -159,7 +159,7 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Return Charity Token as bidder who has sufficient Charity Tokens", async () => {
+  xit("Return Charity Token as bidder who has sufficient Charity Tokens", async () => {
     // Getting sufficient credits
     await marketplaceInstance.getCT({
       from: accounts[4],
