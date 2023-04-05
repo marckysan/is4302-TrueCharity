@@ -30,21 +30,39 @@ contract Marketplace {
         status = MarketplaceState.closed;
     }
 
+    // Bidder's events
     event buyCredit(uint256 ctAmount); // event of minting of CT to the msg.sender
     event returnCredits(uint256 ctAmount); // event of returning of CT of the msg.sender
-    event biddingInitiated(); // event of initiating bidding
-    event categoriesRetrieved(string[] categoryList);
-    event getOwnerEvent(address owner);
 
-    mapping(string => uint256) private minBidAmount; // Min bid for each category as set out by marketplace POC
-    string[] private categoryList;
-    mapping(string => bool) private categoriesIsExist;
+    // Marketplace events
+    event biddingInitiated(MarketplaceState state); // event of initiating bidding
+    event allItemsRetrieved(string[] itemsList); // event of retrieving the list of items
+    event allItemsPricesRetrieved(uint256[] prices); // event of retrieving the prices of all items
+    event itemsRequiredSet(string[] requiredItemsList); // event of having set the items required by the rescue team
+    event itemQuotaUpdated(string itemName, uint256 quota); // event of having updated the item quota
+    event itemMinDonationUpdated(string itemName, uint256 minDonation); // event of having updated the item min donation
+
+    mapping(string => uint256) minDonateAmount; // unit cost of donating per item as set by marketplace POC [To factor in resuce team maintenance fee]
+    mapping(string => uint256) itemQuota; // quota to hit for each item as set by marketplace POC
+    mapping(string => uint256) currentFulfillment; // records the current number of donors for required items
+
+    mapping(string => bool) allItemsIsExist; // records the items that exists for referencing
+    string[] public requiredItemsList;
+    uint256[] public allItemsPriceList;
 
     // modifiers
     modifier ownerOnly() {
         require(
             msg.sender == owner,
             "Only the owner of the marketplace contract can call this function"
+        );
+        _;
+    }
+
+    modifier beforeBidding() {
+        require(
+            status == MarketplaceState.closed,
+            "Function cannot be called once the marketplace is opened for donating"
         );
         _;
     }
@@ -58,65 +76,180 @@ contract Marketplace {
     }
 
     // functions
-    // For marketplace and public to view what categories are available
-    function getCategories() public returns (string[] memory) {
-        categoryList = superAppContract.getCategoryList();
-
-        emit categoriesRetrieved(categoryList);
-        return categoryList;
-    }
-
-    // for marketplace to initialise the min bids of all categories based on min price
-    function setMinBidToMinPrice() public ownerOnly {
+    // For marketplace to view what items are available and their prices
+    function getAllAvailableItemsAndPrices()
+        public
+        ownerOnly
+        beforeBidding
+        returns (string[] memory allItemsList, uint256[] memory)
+    {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
         );
 
-        if (categoryList.length == 0) {
-            getCategories();
+        allItemsList = superAppContract.getItemsList();
+
+        for (uint i = 0; i < allItemsList.length; i++) {
+            allItemsIsExist[allItemsList[i]] = true;
+            allItemsPriceList.push(
+                superAppContract.getItemPrice(allItemsList[i])
+            );
         }
 
-        for (uint256 i = 0; i < categoryList.length; i++) {
-            minBidAmount[categoryList[i]] = superAppContract
-                .getCategoryMinPrice(categoryList[i], owner);
-            categoriesIsExist[categoryList[i]] = true;
-        }
+        emit allItemsRetrieved(allItemsList);
+        emit allItemsPricesRetrieved(allItemsPriceList);
+
+        return (allItemsList, allItemsPriceList);
     }
 
-    // for marketplace owner to set min bids for specific categories
-    function setCategoryMinBid(
-        string memory _categoryName,
-        uint256 _minBidInCT
-    ) public ownerOnly {
-        if (categoryList.length == 0) {
-            getCategories();
-        }
-
-        minBidAmount[_categoryName] = _minBidInCT;
-    }
-
-    // for marketplace and public to get the min bid required for each category
-    function getCategoryMinBid(
-        string memory _categoryName
-    ) public view returns (uint256) {
+    function setRequiredItemsInfo(
+        string[] memory requiredItems,
+        uint256[] memory requiredItemsQuota
+    ) public ownerOnly beforeBidding {
         require(
-            categoriesIsExist[_categoryName] != false,
-            "The category minimum bid has yet to be updated. Please wait, or update the minimum bids if you run the marketplace."
+            superAppContract.getOwner() == owner,
+            "SuperApp store ownership has yet to be transferred."
         );
-        return minBidAmount[_categoryName];
+        require(
+            requiredItems.length == requiredItemsQuota.length,
+            "The number of required items in the required items list and required items quota do not match."
+        );
+        requiredItemsList = requiredItems;
+        for (uint256 i = 0; i < requiredItemsList.length; i++) {
+            string memory itemName = requiredItemsList[i];
+            require(
+                allItemsIsExist[itemName] == true,
+                string(
+                    abi.encodePacked(
+                        "THe following item does not exist: ",
+                        requiredItemsList[i]
+                    )
+                )
+            );
+            itemQuota[itemName] = requiredItemsQuota[i];
+            minDonateAmount[itemName] = superAppContract.getItemPrice(
+                requiredItemsList[i]
+            );
+        }
+
+        emit itemsRequiredSet(requiredItemsList);
+    }
+
+    // Assumption for overloaded function: Marketplace will set either the min price as provided by the store, or set a higher price to earn fees, along with the quota, in the correct sequence
+    function setRequiredItemsInfoManual(
+        string[] memory requiredItems,
+        uint256[] memory requiredItemsQuota,
+        uint256[] memory requiredItemsPrices
+    ) public ownerOnly beforeBidding {
+        require(
+            superAppContract.getOwner() == owner,
+            "SuperApp store ownership has yet to be transferred."
+        );
+        require(
+            requiredItems.length == requiredItemsQuota.length &&
+                requiredItems.length == requiredItemsPrices.length,
+            "The number of required items in the required items list and required items quota and required items prices do not match."
+        );
+        requiredItemsList = requiredItems;
+        for (uint256 i = 0; i < requiredItemsList.length; i++) {
+            string memory itemName = requiredItemsList[i];
+            require(
+                allItemsIsExist[itemName] == true,
+                string(
+                    abi.encodePacked(
+                        "THe following item does not exist: ",
+                        requiredItemsList[i]
+                    )
+                )
+            );
+            itemQuota[itemName] = requiredItemsQuota[i];
+            minDonateAmount[itemName] = requiredItemsPrices[i];
+        }
+
+        emit itemsRequiredSet(requiredItemsList);
+    }
+
+    // for marketplace to update specific items
+    function updateItemQuota(
+        string memory _itemName,
+        uint256 _newQuota
+    ) public ownerOnly beforeBidding {
+        require(
+            superAppContract.getOwner() == owner,
+            "SuperApp store ownership has yet to be transferred."
+        );
+
+        require(
+            itemQuota[_itemName] != 0,
+            "THe item has not been added into the required item list."
+        );
+
+        require(
+            itemQuota[_itemName] != _newQuota,
+            "The old and new quota should not be the same"
+        );
+
+        itemQuota[_itemName] = _newQuota;
+        emit itemQuotaUpdated(_itemName, _newQuota);
+    }
+
+    function updateItemMinDonation(
+        string memory _itemName,
+        uint256 _newMinDonation
+    ) public ownerOnly beforeBidding {
+        require(
+            superAppContract.getOwner() == owner,
+            "SuperApp store ownership has yet to be transferred."
+        );
+
+        require(
+            minDonateAmount[_itemName] != 0,
+            "THe item has not been added into the required item list."
+        );
+
+        require(
+            minDonateAmount[_itemName] != _newMinDonation,
+            "The old and new min donation should not be the same"
+        );
+
+        itemQuota[_itemName] = _newMinDonation;
+        emit itemMinDonationUpdated(_itemName, _newMinDonation);
     }
 
     // Open the market and allow bidders to start bidding
-    function start_bidding() public ownerOnly {
+    function start_bidding() public ownerOnly beforeBidding {
         status = MarketplaceState.open;
     }
 
-    function getStatus() public view biddersOnly returns (MarketplaceState) {
+    function getStatus() public view returns (MarketplaceState) {
         return status;
     }
 
     // Functions for bidders
+    // Getting all donatable items
+    function getDonatableItemOptions() public view returns (string[] memory) {
+        return requiredItemsList;
+    }
+
+    // Getting the amount to be donated per unit for a specific item,
+    function getItemPerUnitDonationAmount(
+        string memory _itemName
+    ) public view returns (uint256) {
+        require(minDonateAmount[_itemName] != 0, "Item does not exist.");
+        return minDonateAmount[_itemName];
+    }
+
+    function getNumDonorsToQuota(
+        string memory _itemName
+    ) public view returns (uint256) {
+        require(
+            itemQuota[_itemName] != 0,
+            "Item is not needed in this charity drive or item does not exist."
+        );
+        return itemQuota[_itemName] - currentFulfillment[_itemName];
+    }
+
     function getCT() public payable biddersOnly {
         require(msg.value >= 1E16, "At least 0.01ETH needed to get DT");
         charityTokenContract.getCredit(msg.sender, msg.value);

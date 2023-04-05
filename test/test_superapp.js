@@ -16,124 +16,140 @@ contract("SuperApp", function (accounts) {
 
   console.log("Testing SuperApp");
 
-  it("Add Category (Not Owner)", async () => {
+  it("Add Item (Not Owner)", async () => {
     truffleAssert.reverts(
-      superAppInstance.addCategory("Meat", { from: accounts[1] }),
+      superAppInstance.addItem("Chicken", 2, { from: accounts[1] }),
       "Only the owner of the superapp contract can call this function"
     );
   });
 
-  it("Add Category", async () => {
-    let v1 = await superAppInstance.addCategory.call("Meat", {
-      from: accounts[0],
-    });
-    assert.equal(v1, true, "Failed to add category");
-  });
-
-  it("Add Category (Duplicate category)", async () => {
-    await superAppInstance.addCategory("Meat");
-    await truffleAssert.reverts(
-      superAppInstance.addCategory("Meat"),
-      "Category already exists, please update the category instead"
-    );
-  });
-
-  it("Update Category Name (Don't exist)", async () => {
-    await truffleAssert.reverts(
-      superAppInstance.updateCategoryName("Drinks", "Wheat"),
-      "The requested category does not exist, it cannot be updated"
-    );
-  });
-
-  it("Update Category Name (New name already used)", async () => {
-    await superAppInstance.addCategory("Carbs");
-    await truffleAssert.reverts(
-      superAppInstance.updateCategoryName("Meat", "Carbs"),
-      "The new name is already used"
-    );
-  });
-
-  it("Delete Category (Don't exist)", async () => {
-    await truffleAssert.reverts(
-      superAppInstance.deleteCategory("Drinks"),
-      "The requested category does not exist, it cannot be deleted"
-    );
-  });
-
-  it("Delete Category", async () => {
-    let v1 = await superAppInstance.deleteCategory.call("Meat");
-    assert.equal(v1, true, "Failed to delete category");
-  });
-
-  it("Add Item (0 CT)", async () => {
-    await truffleAssert.reverts(
-      superAppInstance.addItem("Chicken", 0, "Meat"),
+  it("Add Item (0 Price)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.addItem("Chicken", 0, { from: accounts[0] }),
       "Item's min price needs to be more than 0 Charity Token"
     );
   });
 
-  it("Add Item (Category don't exist)", async () => {
-    await truffleAssert.reverts(
-      superAppInstance.addItem("Milo", 1, "Drinks"),
-      "The requested category does not exist, please create it first"
-    );
-  });
-
   it("Add Item", async () => {
-    let v1 = await superAppInstance.addItem.call("Chicken", 1, "Meat");
-    assert.equal(v1, true, "Failed to add item");
+    let v1 = await superAppInstance.addItem("Chicken", 1);
+    truffleAssert.eventEmitted(
+      v1,
+      "itemAdded",
+      (args) => {
+        return args.addedItem == "Chicken";
+      },
+      "The item added was incorrect."
+    );
   });
 
   it("Add Item (Duplicate item)", async () => {
-    await superAppInstance.addItem("Chicken", 2, "Meat");
     await truffleAssert.reverts(
-      superAppInstance.addItem("Chicken", 2, "Meat"),
-      "Item already exists in the category, please update the item instead"
+      superAppInstance.addItem("Chicken", 1),
+      "Item already exists, please update the item instead"
     );
   });
 
-  it("Update Item (Min price)", async () => {
-    let v1 = await superAppInstance.updateItem.call("Chicken", 1);
-    assert.equal(v1, true, "Failed to update item's minmum price");
-  });
-
-  it("Update Item (Min price = 0)", async () => {
+  it("Update Item Name (Don't exist)", async () => {
     await truffleAssert.reverts(
-      superAppInstance.updateItem("Chicken", 0),
-      "New price must be more than 0 Charity Token"
-    );
-  });
-
-  it("Update Item (Item don't exist)", async () => {
-    await truffleAssert.reverts(
-      superAppInstance.updateItem("Beef", 1),
+      superAppInstance.updateItemName("Drinks", "Wheat"),
       "Item does not exist"
     );
   });
 
-  it("Update Item (Min price, validity)", async () => {
-    let v1 = await superAppInstance.updateItem.call("Chicken", 1, false);
-    assert.equal(v1, true, "Failed to update item's minmum price and validity");
-  });
+  it("Update Item Name (New name already used)", async () => {
+    await superAppInstance.addItem("Rice", 2);
 
-  it("Update Item (Min price, validity, name)", async () => {
-    let v1 = await superAppInstance.updateItem.call(
-      "Chicken",
-      1,
-      false,
-      "Beef"
-    );
-    assert.equal(
-      v1,
-      true,
-      "Failed to update item's minmum price, validity, and name"
-    );
-  });
-
-  it("Update Item (Name already exists)", async () => {
     await truffleAssert.reverts(
-      superAppInstance.updateItem("Chicken", 1, false, "Chicken"),
-      "Item's name already exists, use another name"
+      superAppInstance.updateItemName("Chicken", "Rice"),
+      "The new name is already used"
+    );
+  });
+
+  it("Update Item Name", async () => {
+    let v1 = await superAppInstance.updateItemName("Rice", "Chair");
+
+    truffleAssert.eventEmitted(
+      v1,
+      "itemNameUpdated",
+      (args) => {
+        return args.oldItem == "Rice" && args.newItem == "Chair";
+      },
+      "The item name was not updated correctly"
+    );
+  });
+
+  it("Update Item Price (0 Price)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.updateItemPrice("Chicken", 0, { from: accounts[0] }),
+      "New price must be more than 0 Charity Token"
+    );
+  });
+
+  it("Update Item Price (Don't exist)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.updateItemPrice("Shirt", 2, { from: accounts[0] }),
+      "Item does not exist"
+    );
+  });
+
+  it("Update Item Price (Same as previous price)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.updateItemPrice("Chair", 2, { from: accounts[0] }),
+      "Item price did not change"
+    );
+  });
+
+  it("Update Item Price", async () => {
+    let v1 = await superAppInstance.updateItemPrice("Chair", 1, {
+      from: accounts[0],
+    });
+    truffleAssert.eventEmitted(
+      v1,
+      "itemPriceUpdated",
+      (args) => {
+        return args.item == "Chair" && args.oldPrice == 2 && args.newPrice == 1;
+      },
+      "The item price was not updated correctly"
+    );
+  });
+
+  it("Delete Item (Don't exist)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.deleteItem("Shirt", { from: accounts[0] }),
+      "Item does not exist"
+    );
+  });
+
+  it("Delete Item", async () => {
+    let v1 = await superAppInstance.deleteItem("Chicken");
+    truffleAssert.eventEmitted(
+      v1,
+      "itemRemoved",
+      (args) => {
+        return args.removedItem == "Chicken";
+      },
+      "The item was not deleted correctly"
+    );
+  });
+
+  it("Get items list", async () => {
+    await superAppInstance.addItem("Chicken", 1);
+    await superAppInstance.addItem("Cloth", 3);
+    let v1 = await superAppInstance.getItemsList();
+    assert.equal(v1[0], "Chair", "Item lists generated do not match.");
+    assert.equal(v1[1], "Chicken", "Item lists generated do not match.");
+    assert.equal(v1[2], "Cloth", "Item lists generated do not match.");
+  });
+
+  it("Get items price (Don't exist)", async () => {
+    let v1 = await superAppInstance.getItemPrice("Chicken");
+    assert.equal(v1, 1, "Item price generated does not match.");
+  });
+
+  it("Get items price (Don't exist)", async () => {
+    truffleAssert.reverts(
+      superAppInstance.getItemPrice("Coke"),
+      "Item does not exist"
     );
   });
 

@@ -25,67 +25,201 @@ contract("Marketplace", function (accounts) {
   console.log("Testing Marketplace");
 
   // PRE BIDDING TEST CASES
-  it("Get Category List", async () => {
+  it("Get Items List (Not Marketplace Owner)", async () => {
     // Adding mock categories
-    await superAppInstance.addCategory("Meat", { from: accounts[0] });
-    await superAppInstance.addCategory("Furniture", { from: accounts[0] });
-    await superAppInstance.addItem("Chicken", 1, "Meat", { from: accounts[0] });
-    await superAppInstance.addItem("Pork", 2, "Meat", { from: accounts[0] });
-    await superAppInstance.addItem("Table", 2, "Furniture", {
-      from: accounts[0],
-    });
-    await superAppInstance.addItem("Chair", 1, "Furniture", {
-      from: accounts[0],
-    });
-    await superAppInstance.transfer(accounts[1], { from: accounts[0] });
-
-    let v1 = await marketplaceInstance.getCategories({
-      from: accounts[1],
-    });
-
-    assert.equal(
-      v1.logs[0].args.categoryList[0],
-      "Meat",
-      "Category lists generated do not match."
-    );
-    assert.equal(
-      v1.logs[0].args.categoryList[1],
-      "Furniture",
-      "Category lists generated do not match."
-    );
-  });
-
-  it("Get Category Min Bid when it's not set", async () => {
+    await superAppInstance.addItem("Chicken", 1);
+    await superAppInstance.addItem("Cloth", 3);
+    await superAppInstance.addItem("Chair", 2);
+    await superAppInstance.addItem("Shirt", 5);
+    await superAppInstance.addItem("Milo", 2);
     await truffleAssert.reverts(
-      marketplaceInstance.getCategoryMinBid("Meat", { from: accounts[1] }),
-      "The category minimum bid has yet to be updated. Please wait, or update the minimum bids if you run the marketplace."
-    );
-  });
-
-  it("Set Category Min Bid to Category Min Price as Unauthorized User [ownerOnly modifier]", async () => {
-    await truffleAssert.reverts(
-      marketplaceInstance.setMinBidToMinPrice({ from: accounts[2] }),
+      marketplaceInstance.getAllAvailableItemsAndPrices({ from: accounts[2] }),
       "Only the owner of the marketplace contract can call this function"
     );
   });
 
-  it("Set Category Min Bid to Category Min Price", async () => {
-    await marketplaceInstance.setMinBidToMinPrice({ from: accounts[1] });
-    let v1 = await marketplaceInstance.getCategoryMinBid("Furniture", {
-      from: accounts[2],
-    });
-
-    assert.equal(v1, 1, "Furniture Category Min Bid does not match.");
+  it("Get Item List (Superapp not transferred yet)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.getAllAvailableItemsAndPrices({
+        from: accounts[1],
+      }),
+      "SuperApp store ownership has yet to be transferred."
+    );
   });
 
-  it("Set Category Min Bid to Specific Price as Marketplace Owner", async () => {
-    await marketplaceInstance.setCategoryMinBid("Meat", 5, {
+  it("Get Items List", async () => {
+    await superAppInstance.transfer(accounts[1], { from: accounts[0] });
+    let v1 = await marketplaceInstance.getAllAvailableItemsAndPrices({
       from: accounts[1],
     });
-    let v1 = await marketplaceInstance.getCategoryMinBid("Meat", {
-      from: accounts[2],
+
+    truffleAssert.eventEmitted(
+      v1,
+      "allItemsRetrieved",
+      (args) => {
+        return (
+          args.itemsList[0] == "Chicken" &&
+          args.itemsList[1] == "Cloth" &&
+          args.itemsList[2] == "Chair" &&
+          args.itemsList[3] == "Shirt" &&
+          args.itemsList[4] == "Milo"
+        );
+      },
+      "The item list generated was incorrect."
+    );
+    truffleAssert.eventEmitted(
+      v1,
+      "allItemsPricesRetrieved",
+      (args) => {
+        return (
+          args.prices[0] == 1 &&
+          args.prices[1] == 3 &&
+          args.prices[2] == 2 &&
+          args.prices[3] == 5 &&
+          args.prices[4] == 2
+        );
+      },
+      "The price list generated was incorrect."
+    );
+  });
+
+  it("Set Required Items and Prices and Quota based on Store Prices (Different input lengths)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.setRequiredItemsInfo(["Chicken", "Chair"], [10], {
+        from: accounts[1],
+      }),
+      "The number of required items in the required items list and required items quota do not match."
+    );
+  });
+
+  it("Set Required Items and Prices and Quota based on Store Prices (Invalid Item)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.setRequiredItemsInfo(["Chicken", "Table"], [10, 5], {
+        from: accounts[1],
+      }),
+      "THe following item does not exist: Table"
+    );
+  });
+
+  it("Set Required Items and Prices and Quota based on Store Prices", async () => {
+    let v1 = await marketplaceInstance.setRequiredItemsInfo(
+      ["Chicken", "Chair"],
+      [10, 5],
+      {
+        from: accounts[1],
+      }
+    );
+    truffleAssert.eventEmitted(
+      v1,
+      "itemsRequiredSet",
+      (args) => {
+        return (
+          args.requiredItemsList[0] == "Chicken" &&
+          args.requiredItemsList[1] == "Chair"
+        );
+      },
+      "The required items list generated was incorrect."
+    );
+  });
+
+  it("Set Required Items and Prices and Quota Manually (Different input lengths)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.setRequiredItemsInfoManual(
+        ["Chicken", "Chair"],
+        [10, 5],
+        [2],
+        {
+          from: accounts[1],
+        }
+      ),
+      "The number of required items in the required items list and required items quota and required items prices do not match."
+    );
+  });
+
+  it("Set Required Items and Prices and Quota based on Store Prices", async () => {
+    let v1 = await marketplaceInstance.setRequiredItemsInfoManual(
+      ["Cloth", "Milo"],
+      [10, 5],
+      [1, 2],
+      {
+        from: accounts[1],
+      }
+    );
+    truffleAssert.eventEmitted(
+      v1,
+      "itemsRequiredSet",
+      (args) => {
+        return (
+          args.requiredItemsList[0] == "Cloth" &&
+          args.requiredItemsList[1] == "Milo"
+        );
+      },
+      "The required items list generated was incorrect."
+    );
+  });
+
+  it("Update Item Quota (Invalid Item)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.updateItemQuota("Chicken Rice", 10, {
+        from: accounts[1],
+      }),
+      "THe item has not been added into the required item list."
+    );
+  });
+
+  it("Update Item Quota (Old and new quota same)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.updateItemQuota("Chicken", 10, {
+        from: accounts[1],
+      }),
+      "The old and new quota should not be the same"
+    );
+  });
+
+  it("Update Item Quota", async () => {
+    let v1 = await marketplaceInstance.updateItemQuota("Chicken", 20, {
+      from: accounts[1],
     });
-    assert.equal(v1, 5, "Meat Category Min Bid does not match.");
+    truffleAssert.eventEmitted(
+      v1,
+      "itemQuotaUpdated",
+      (args) => {
+        return args.itemName == "Chicken" && args.quota == 20;
+      },
+      "The item or quota to be updated was incorrect."
+    );
+  });
+
+  it("Update Item Min Donation (Invalid Item)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.updateItemMinDonation("Chicken Rice", 4, {
+        from: accounts[1],
+      }),
+      "THe item has not been added into the required item list."
+    );
+  });
+
+  it("Update Item Min Donation (Old and new quota same)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.updateItemMinDonation("Chicken", 1, {
+        from: accounts[1],
+      }),
+      "The old and new min donation should not be the same"
+    );
+  });
+
+  it("Update Item Min Donation", async () => {
+    let v1 = await marketplaceInstance.updateItemMinDonation("Chicken", 6, {
+      from: accounts[1],
+    });
+    truffleAssert.eventEmitted(
+      v1,
+      "itemMinDonationUpdated",
+      (args) => {
+        return args.itemName == "Chicken" && args.minDonation == 6;
+      },
+      "The item or min donation to be updated was incorrect."
+    );
   });
 
   // SETTING MARKETPLACE STATUS TEST CASES
@@ -109,6 +243,49 @@ contract("Marketplace", function (accounts) {
   });
 
   // CHARITY TOKEN RELATED TEST CASES FOR BIDDERS
+
+  it("Get Donatable Items Options", async () => {
+    let v1 = await marketplaceInstance.getDonatableItemOptions({
+      from: accounts[2],
+    });
+    assert.equal(v1[0], "Cloth", "Donatable Items List is wrong");
+    assert.equal(v1[1], "Milo", "Donatable Items List is wrong");
+  });
+
+  it("Get Item Per Unit Donation Amount (Item don't exist)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.getItemPerUnitDonationAmount("Cheese", {
+        from: accounts[2],
+      }),
+      "Item does not exist."
+    );
+  });
+
+  it("Get Item Per Unit Donation Amount", async () => {
+    let v1 = await marketplaceInstance.getItemPerUnitDonationAmount("Milo", {
+      from: accounts[2],
+    });
+
+    assert.equal(v1, 2, "Per Unit Donation Amount is wrong");
+  });
+
+  it("Get Item Remaining Quota (Item don't exist)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.getNumDonorsToQuota("Cheese", {
+        from: accounts[2],
+      }),
+      "Item is not needed in this charity drive or item does not exist."
+    );
+  });
+
+  it("Get Item Remaining Quota", async () => {
+    let v1 = await marketplaceInstance.getNumDonorsToQuota("Cloth", {
+      from: accounts[2],
+    });
+
+    assert.equal(v1, 10, "Number of donors to hit quota is wrong");
+  });
+
   it("Get Charity Token as marketplace owner", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.getCT({
