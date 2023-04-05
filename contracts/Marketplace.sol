@@ -45,6 +45,8 @@ contract Marketplace {
     mapping(string => uint256) minDonateAmount; // unit cost of donating per item as set by marketplace POC [To factor in resuce team maintenance fee]
     mapping(string => uint256) itemQuota; // quota to hit for each item as set by marketplace POC
     mapping(string => uint256) currentFulfillment; // records the current number of donors for required items
+
+    mapping(string => bool) allItemsIsExist; // records the items that exists for referencing
     string[] public requiredItemsList;
     uint256[] public allItemsPriceList;
 
@@ -87,7 +89,9 @@ contract Marketplace {
         );
 
         allItemsList = superAppContract.getItemsList();
+
         for (uint i = 0; i < allItemsList.length; i++) {
+            allItemsIsExist[allItemsList[i]] = true;
             allItemsPriceList.push(
                 superAppContract.getItemPrice(allItemsList[i])
             );
@@ -114,6 +118,15 @@ contract Marketplace {
         requiredItemsList = requiredItems;
         for (uint256 i = 0; i < requiredItemsList.length; i++) {
             string memory itemName = requiredItemsList[i];
+            require(
+                allItemsIsExist[itemName] == true,
+                string(
+                    abi.encodePacked(
+                        "THe following item does not exist: ",
+                        requiredItemsList[i]
+                    )
+                )
+            );
             itemQuota[itemName] = requiredItemsQuota[i];
             minDonateAmount[itemName] = superAppContract.getItemPrice(
                 requiredItemsList[i]
@@ -124,7 +137,7 @@ contract Marketplace {
     }
 
     // Assumption for overloaded function: Marketplace will set either the min price as provided by the store, or set a higher price to earn fees, along with the quota, in the correct sequence
-    function setRequiredItemsInfo(
+    function setRequiredItemsInfoManual(
         string[] memory requiredItems,
         uint256[] memory requiredItemsQuota,
         uint256[] memory requiredItemsPrices
@@ -141,6 +154,15 @@ contract Marketplace {
         requiredItemsList = requiredItems;
         for (uint256 i = 0; i < requiredItemsList.length; i++) {
             string memory itemName = requiredItemsList[i];
+            require(
+                allItemsIsExist[itemName] == true,
+                string(
+                    abi.encodePacked(
+                        "THe following item does not exist: ",
+                        requiredItemsList[i]
+                    )
+                )
+            );
             itemQuota[itemName] = requiredItemsQuota[i];
             minDonateAmount[itemName] = requiredItemsPrices[i];
         }
@@ -163,6 +185,11 @@ contract Marketplace {
             "THe item has not been added into the required item list."
         );
 
+        require(
+            itemQuota[_itemName] != _newQuota,
+            "The old and new quota should not be the same"
+        );
+
         itemQuota[_itemName] = _newQuota;
         emit itemQuotaUpdated(_itemName, _newQuota);
     }
@@ -181,6 +208,11 @@ contract Marketplace {
             "THe item has not been added into the required item list."
         );
 
+        require(
+            minDonateAmount[_itemName] != _newMinDonation,
+            "The old and new min donation should not be the same"
+        );
+
         itemQuota[_itemName] = _newMinDonation;
         emit itemMinDonationUpdated(_itemName, _newMinDonation);
     }
@@ -195,7 +227,6 @@ contract Marketplace {
     }
 
     // Functions for bidders
-
     // Getting all donatable items
     function getDonatableItemOptions() public view returns (string[] memory) {
         return requiredItemsList;
