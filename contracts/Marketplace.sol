@@ -14,8 +14,7 @@ contract Marketplace {
 
     enum MarketplaceState {
         closed,
-        open,
-        voting
+        opened
     }
     MarketplaceState status;
 
@@ -41,6 +40,8 @@ contract Marketplace {
     event itemsRequiredSet(string[] requiredItemsList); // event of having set the items required by the rescue team
     event itemQuotaUpdated(string itemName, uint256 quota); // event of having updated the item quota
     event itemMinDonationUpdated(string itemName, uint256 minDonation); // event of having updated the item min donation
+    event itemBidded(string itemName, uint256 remainingQuota);
+    event CTTransferToOwner(uint256 CTAmt);
 
     mapping(string => uint256) minDonateAmount; // unit cost of donating per item as set by marketplace POC [To factor in resuce team maintenance fee]
     mapping(string => uint256) itemQuota; // quota to hit for each item as set by marketplace POC
@@ -59,10 +60,18 @@ contract Marketplace {
         _;
     }
 
-    modifier beforeBidding() {
+    modifier notBidding() {
         require(
             status == MarketplaceState.closed,
-            "Function cannot be called once the marketplace is opened for donating"
+            "Function cannot be called once the marketplace is opened for bidding"
+        );
+        _;
+    }
+
+    modifier duringBidding() {
+        require(
+            status == MarketplaceState.opened,
+            "Function cannot be called as the marketplace is not opened for bidding"
         );
         _;
     }
@@ -70,7 +79,7 @@ contract Marketplace {
     modifier biddersOnly() {
         require(
             msg.sender != owner,
-            "Only the bidders can get, check and return Charity Tokens"
+            "Only the bidders can get, check and return Charity Tokens, or bid"
         );
         _;
     }
@@ -80,15 +89,15 @@ contract Marketplace {
     function getAllAvailableItemsAndPrices()
         public
         ownerOnly
-        beforeBidding
-        returns (string[] memory allItemsList, uint256[] memory)
+        notBidding
+        returns (string[] memory, uint256[] memory)
     {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
         );
 
-        allItemsList = superAppContract.getItemsList();
+        string[] memory allItemsList = superAppContract.getItemsList();
 
         for (uint i = 0; i < allItemsList.length; i++) {
             allItemsIsExist[allItemsList[i]] = true;
@@ -106,7 +115,7 @@ contract Marketplace {
     function setRequiredItemsInfo(
         string[] memory requiredItems,
         uint256[] memory requiredItemsQuota
-    ) public ownerOnly beforeBidding {
+    ) public ownerOnly notBidding {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
@@ -141,7 +150,7 @@ contract Marketplace {
         string[] memory requiredItems,
         uint256[] memory requiredItemsQuota,
         uint256[] memory requiredItemsPrices
-    ) public ownerOnly beforeBidding {
+    ) public ownerOnly notBidding {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
@@ -174,7 +183,7 @@ contract Marketplace {
     function updateItemQuota(
         string memory _itemName,
         uint256 _newQuota
-    ) public ownerOnly beforeBidding {
+    ) public ownerOnly notBidding {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
@@ -197,7 +206,7 @@ contract Marketplace {
     function updateItemMinDonation(
         string memory _itemName,
         uint256 _newMinDonation
-    ) public ownerOnly beforeBidding {
+    ) public ownerOnly notBidding {
         require(
             superAppContract.getOwner() == owner,
             "SuperApp store ownership has yet to be transferred."
@@ -218,8 +227,12 @@ contract Marketplace {
     }
 
     // Open the market and allow bidders to start bidding
-    function start_bidding() public ownerOnly beforeBidding {
-        status = MarketplaceState.open;
+    function start_bidding() public ownerOnly notBidding {
+        status = MarketplaceState.opened;
+    }
+
+    function stop_bidding() public ownerOnly duringBidding {
+        status = MarketplaceState.closed;
     }
 
     function getStatus() public view returns (MarketplaceState) {
@@ -250,6 +263,10 @@ contract Marketplace {
         return itemQuota[_itemName] - currentFulfillment[_itemName];
     }
 
+    function getCurrentFulfillment(string memory _itemName) view public returns (uint256) {
+        return currentFulfillment[_itemName];
+    }
+
     function getCT() public payable biddersOnly {
         require(msg.value >= 1E16, "At least 0.01ETH needed to get DT");
         charityTokenContract.getCredit(msg.sender, msg.value);
@@ -272,5 +289,33 @@ contract Marketplace {
         uint256 toRetInWei = CTToReturn * 10000000000000000;
         recipient.transfer(toRetInWei);
         emit returnCredits(CTToReturn);
+    }
+
+    function bidForItem(string memory _itemName) public biddersOnly duringBidding {
+        uint256 quotaRemaining = getNumDonorsToQuota(_itemName);
+        require(quotaRemaining > 0, "No more quota remaining");
+        uint256 minDonationAmt = getItemPerUnitDonationAmount(_itemName);
+        require(charityTokenContract.checkCredit(msg.sender) >= minDonationAmt, "Not enough CT");
+        charityTokenContract.transferCredit(address(this), minDonationAmt);
+        currentFulfillment[_itemName] = currentFulfillment[_itemName] + 1;
+        emit itemBidded(_itemName, getNumDonorsToQuota(_itemName));
+    }
+
+    function getItemsAndRemainingQuota() view public ownerOnly returns (string[] memory, uint256[] memory) {
+        uint256[] memory quotaList = new uint256[](requiredItemsList.length);
+        for (uint i = 0; i < requiredItemsList.length; i++) {
+            string memory itemName = requiredItemsList[i];
+            uint256 quotaRemaining = itemQuota[itemName] - currentFulfillment[itemName];
+            quotaList[i] = quotaRemaining;
+        }
+
+        return (requiredItemsList, quotaList);
+    }
+
+    function stopBiddingAndTransferCTToOwner() public ownerOnly duringBidding {
+        uint256 contractCTAmt = charityTokenContract.checkCredit(address(this));
+        charityTokenContract.transferCreditFrom(address(this), owner, contractCTAmt);
+        status = MarketplaceState.closed;
+        emit CTTransferToOwner(contractCTAmt);
     }
 }

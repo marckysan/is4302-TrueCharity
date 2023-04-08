@@ -36,7 +36,9 @@ contract("SuperApp", function (accounts) {
       v1,
       "itemAdded",
       (args) => {
-        return args.addedItem == "Chicken";
+        return args.addedItem == "Chicken" &&
+        args.itemIndex == 0 &&
+        args.itemListName == "Chicken";
       },
       "The item added was incorrect."
     );
@@ -72,7 +74,9 @@ contract("SuperApp", function (accounts) {
       v1,
       "itemNameUpdated",
       (args) => {
-        return args.oldItem == "Rice" && args.newItem == "Chair";
+        return args.oldItem == "Rice" &&
+        args.newItem == "Chair" &&
+        args.itemListName == "Chair";
       },
       "The item name was not updated correctly"
     );
@@ -95,7 +99,7 @@ contract("SuperApp", function (accounts) {
   it("Update Item Price (Same as previous price)", async () => {
     truffleAssert.reverts(
       superAppInstance.updateItemPrice("Chair", 2, { from: accounts[0] }),
-      "Item price did not change"
+      "New item price needs to be different from current item price"
     );
   });
 
@@ -107,7 +111,9 @@ contract("SuperApp", function (accounts) {
       v1,
       "itemPriceUpdated",
       (args) => {
-        return args.item == "Chair" && args.oldPrice == 2 && args.newPrice == 1;
+        return args.item == "Chair" &&
+        args.oldPrice == 2 &&
+        args.newPrice == 1;
       },
       "The item price was not updated correctly"
     );
@@ -126,7 +132,8 @@ contract("SuperApp", function (accounts) {
       v1,
       "itemRemoved",
       (args) => {
-        return args.removedItem == "Chicken";
+        return args.itemsListPreLength == 2 &&
+        args.itemsListPostLength == 1;
       },
       "The item was not deleted correctly"
     );
@@ -141,7 +148,7 @@ contract("SuperApp", function (accounts) {
     assert.equal(v1[2], "Cloth", "Item lists generated do not match.");
   });
 
-  it("Get items price (Don't exist)", async () => {
+  it("Get items price", async () => {
     let v1 = await superAppInstance.getItemPrice("Chicken");
     assert.equal(v1, 1, "Item price generated does not match.");
   });
