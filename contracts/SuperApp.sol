@@ -25,9 +25,9 @@ contract SuperApp {
         uint256 priceinCT;
     }
 
-    event itemAdded(string addedItem);
-    event itemRemoved(string removedItem);
-    event itemNameUpdated(string oldItem, string newItem);
+    event itemAdded(string addedItem, uint256 itemIndex, string itemListName);
+    event itemRemoved(uint256 itemsListPreLength, uint256 itemsListPostLength);
+    event itemNameUpdated(string oldItem, string newItem, string itemListName);
     event itemPriceUpdated(string item, uint256 oldPrice, uint256 newPrice);
 
     // Initialise the superapp with the requirement that it must have at least 1 category with 1 item
@@ -52,7 +52,7 @@ contract SuperApp {
         string memory _itemName,
         uint256 _index,
         UpdateFunction _function
-    ) public ownerOnly {
+    ) private ownerOnly {
         if (_function == UpdateFunction.add) {
             itemIndexMapping[_itemName] = _index;
             itemsList.push(_itemName);
@@ -60,8 +60,8 @@ contract SuperApp {
             itemsList[_index] = itemsList[itemsList.length - 1];
             itemsList.pop();
             delete itemIndexMapping[_itemName];
-            for (uint i = _index; i < itemsList.length; i++) {
-                itemIndexMapping[itemsList[i]] = i;
+            if (itemsList.length > 0) {
+                itemIndexMapping[itemsList[_index]] = _index;
             }
         }
     }
@@ -72,7 +72,7 @@ contract SuperApp {
         string memory _newItemName,
         uint256 _index,
         UpdateFunction _function
-    ) public ownerOnly {
+    ) private ownerOnly {
         if (_function == UpdateFunction.update) {
             delete itemIndexMapping[_oldItemName];
             itemIndexMapping[_newItemName] = _index;
@@ -101,7 +101,8 @@ contract SuperApp {
             itemsList.length,
             UpdateFunction.add
         );
-        emit itemAdded(_itemName);
+        uint256 itemIndex = itemIndexMapping[_itemName];
+        emit itemAdded(itemMapping[_itemName].itemName, itemIndex, itemsList[itemIndex]);
     }
 
     function updateItemName(
@@ -114,7 +115,7 @@ contract SuperApp {
             "The new name is already used"
         );
 
-        item memory updatedItem = itemMapping[_itemName];
+        item storage updatedItem = itemMapping[_itemName];
         updatedItem.itemName = _newItemName;
 
         itemMapping[_newItemName] = updatedItem;
@@ -128,7 +129,7 @@ contract SuperApp {
             UpdateFunction.update
         );
 
-        emit itemNameUpdated(_itemName, _newItemName);
+        emit itemNameUpdated(_itemName, itemMapping[_newItemName].itemName, itemsList[oldItemIndex]);
     }
 
     function updateItemPrice(
@@ -142,28 +143,29 @@ contract SuperApp {
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
         require(
             itemMapping[_itemName].priceinCT != _newPriceinCT,
-            "Item price did not change"
+            "New item price needs to be different from current item price"
         );
 
-        item memory updatedItem = itemMapping[_itemName];
+        item storage updatedItem = itemMapping[_itemName];
         uint256 oldPrice = updatedItem.priceinCT;
         updatedItem.priceinCT = _newPriceinCT;
         itemMapping[_itemName] = updatedItem;
 
-        emit itemPriceUpdated(_itemName, oldPrice, _newPriceinCT);
+        emit itemPriceUpdated(_itemName, oldPrice, itemMapping[_itemName].priceinCT);
     }
 
     function deleteItem(string memory _itemName) public ownerOnly {
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
 
         delete itemMapping[_itemName];
+        uint256 itemsListPreLength = itemsList.length;
         updateItemIndexArrMapping(
             _itemName,
             itemIndexMapping[_itemName],
             UpdateFunction.remove
         );
 
-        emit itemRemoved(_itemName);
+        emit itemRemoved(itemsListPreLength, itemsList.length);
     }
 
     // Transfer mapping ownership to marketplace through implementation of store strucutre
@@ -173,6 +175,7 @@ contract SuperApp {
     }
 
     function getItemsList() public view returns (string[] memory) {
+        require(tx.origin == owner, "Only the owner of superapp can get the list of items");
         return itemsList;
     }
 
@@ -187,6 +190,7 @@ contract SuperApp {
     function getItemPrice(
         string memory _itemName
     ) public view returns (uint256) {
+        require(tx.origin == owner, "Only the owner can retrieve the prices of items");
         require(itemMapping[_itemName].priceinCT != 0, "Item does not exist");
         return itemMapping[_itemName].priceinCT;
     }

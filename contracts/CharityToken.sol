@@ -39,10 +39,20 @@ contract CharityToken {
 
     /**
      * @dev Function to transfer the credit from the owner to the recipient
-     * @param recipient address of the recipient that will gain in CT
-     * @param amt uint256 aount of CT to transfer
+     * @param recipient address of the recipient that will gain CT
+     * @param amt uint256 amount of CT to transfer
      */
     function transferCredit(address recipient, uint256 amt) public {
         erc20Contract.transfer(recipient, amt);
     }
+
+    /**
+     * @dev Function to transfer the credit from sender to recipient
+     * @param sender address of the sender that sends the CT
+     * @param recipient address of the recipient that will gain CT
+     * @param amt uint256 amount of CT to transfer
+     */
+     function transferCreditFrom(address sender, address recipient, uint256 amt) public {
+        erc20Contract.transferFrom(sender, recipient, amt);
+     }
 }
