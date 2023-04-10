@@ -41,6 +41,11 @@ contract Marketplace {
     event itemQuotaUpdated(string itemName, uint256 quota); // event of having updated the item quota
     event itemMinDonationUpdated(string itemName, uint256 minDonation); // event of having updated the item min donation
     event itemBidded(string itemName, uint256 remainingQuota);
+    event itemsBidded(
+        string itemName,
+        uint256 numberDonated,
+        uint256 remainingQuota
+    );
     event CTTransferToOwner(uint256 CTAmt);
 
     mapping(string => uint256) minDonateAmount; // unit cost of donating per item as set by marketplace POC [To factor in resuce team maintenance fee]
@@ -263,7 +268,9 @@ contract Marketplace {
         return itemQuota[_itemName] - currentFulfillment[_itemName];
     }
 
-    function getCurrentFulfillment(string memory _itemName) view public returns (uint256) {
+    function getCurrentFulfillment(
+        string memory _itemName
+    ) public view returns (uint256) {
         return currentFulfillment[_itemName];
     }
 
@@ -291,21 +298,59 @@ contract Marketplace {
         emit returnCredits(CTToReturn);
     }
 
-    function bidForItem(string memory _itemName) public biddersOnly duringBidding {
+    function bidForItem(
+        string memory _itemName
+    ) public biddersOnly duringBidding {
         uint256 quotaRemaining = getNumDonorsToQuota(_itemName);
         require(quotaRemaining > 0, "No more quota remaining");
         uint256 minDonationAmt = getItemPerUnitDonationAmount(_itemName);
-        require(charityTokenContract.checkCredit(msg.sender) >= minDonationAmt, "Not enough CT");
+        require(
+            charityTokenContract.checkCredit(msg.sender) >= minDonationAmt,
+            "Not enough CT"
+        );
         charityTokenContract.transferCredit(address(this), minDonationAmt);
         currentFulfillment[_itemName] = currentFulfillment[_itemName] + 1;
         emit itemBidded(_itemName, getNumDonorsToQuota(_itemName));
     }
 
-    function getItemsAndRemainingQuota() view public ownerOnly returns (string[] memory, uint256[] memory) {
+    function bidForItemWithQuantity(
+        string memory _itemName,
+        uint256 _quantityToDonate
+    ) public biddersOnly duringBidding {
+        uint256 quotaRemaining = getNumDonorsToQuota(_itemName);
+        require(quotaRemaining > 0, "No more quota remaining");
+        require(
+            quotaRemaining > _quantityToDonate,
+            "The quota remaining required is less than the amount you would like to donate."
+        );
+        uint256 minDonationAmt = getItemPerUnitDonationAmount(_itemName);
+        require(
+            charityTokenContract.checkCredit(msg.sender) >=
+                (minDonationAmt * _quantityToDonate),
+            "Not enough CT"
+        );
+        charityTokenContract.transferCredit(address(this), minDonationAmt * _quantityToDonate);
+        currentFulfillment[_itemName] =
+            currentFulfillment[_itemName] +
+            _quantityToDonate;
+        emit itemsBidded(
+            _itemName,
+            _quantityToDonate,
+            getNumDonorsToQuota(_itemName)
+        );
+    }
+
+    function getItemsAndRemainingQuota()
+        public
+        view
+        ownerOnly
+        returns (string[] memory, uint256[] memory)
+    {
         uint256[] memory quotaList = new uint256[](requiredItemsList.length);
         for (uint i = 0; i < requiredItemsList.length; i++) {
             string memory itemName = requiredItemsList[i];
-            uint256 quotaRemaining = itemQuota[itemName] - currentFulfillment[itemName];
+            uint256 quotaRemaining = itemQuota[itemName] -
+                currentFulfillment[itemName];
             quotaList[i] = quotaRemaining;
         }
 
@@ -314,7 +359,11 @@ contract Marketplace {
 
     function stopBiddingAndTransferCTToOwner() public ownerOnly duringBidding {
         uint256 contractCTAmt = charityTokenContract.checkCredit(address(this));
-        charityTokenContract.transferCreditFrom(address(this), owner, contractCTAmt);
+        charityTokenContract.transferCreditFrom(
+            address(this),
+            owner,
+            contractCTAmt
+        );
         status = MarketplaceState.closed;
         emit CTTransferToOwner(contractCTAmt);
     }

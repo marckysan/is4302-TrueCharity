@@ -13,7 +13,7 @@ const Marketplace = artifacts.require("../contracts/Marketplace.sol");
 /**
  * Account 0 : SuperApp owner
  * Account 1 : Marketplace owner
- * Accounts 2 - 5 : Test bidders
+ * Accounts 2 - 6 : Test bidders
  */
 contract("Marketplace", function (accounts) {
   before(async () => {
@@ -232,12 +232,12 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Bid for item (Marketplace closed)", async() => {
+  it("Bid for item (Marketplace closed)", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.bidForItem("Milo", { from: accounts[2] }),
       "Function cannot be called as the marketplace is not opened for bidding"
     );
-  })
+  });
 
   it("Set marketplace status to open as the marketplace owner", async () => {
     await marketplaceInstance.start_bidding({ from: accounts[1] });
@@ -321,14 +321,8 @@ contract("Marketplace", function (accounts) {
       await marketplaceInstance.checkCT({ from: accounts[3] })
     );
 
-    assert(
-      v1.isEqualTo(50),
-      "Incorrect CT minted for account 2"
-    );
-    assert(
-      v2.isEqualTo(100),
-      "Incorrect CT minted for account 3"
-    );
+    assert(v1.isEqualTo(50), "Incorrect CT minted for account 2");
+    assert(v2.isEqualTo(100), "Incorrect CT minted for account 3");
   });
 
   it("Return Charity Token as bidder who has no Charity Tokens", async () => {
@@ -362,14 +356,22 @@ contract("Marketplace", function (accounts) {
     );
   });
 
-  it("Bid for item", async() => {
+  it("Bid for item", async () => {
     let v1 = new BigNumber(await charityTokenInstance.checkCredit(accounts[2]));
-    let v2 = new BigNumber(await charityTokenInstance.checkCredit(marketplaceInstance.address));
-    let v3 = new BigNumber(await marketplaceInstance.getCurrentFulfillment("Milo"));
+    let v2 = new BigNumber(
+      await charityTokenInstance.checkCredit(marketplaceInstance.address)
+    );
+    let v3 = new BigNumber(
+      await marketplaceInstance.getCurrentFulfillment("Milo")
+    );
     await marketplaceInstance.bidForItem("Milo", { from: accounts[2] });
     let v4 = new BigNumber(await charityTokenInstance.checkCredit(accounts[2]));
-    let v5 = new BigNumber(await charityTokenInstance.checkCredit(marketplaceInstance.address));
-    let v6 = new BigNumber(await marketplaceInstance.getCurrentFulfillment("Milo"));
+    let v5 = new BigNumber(
+      await charityTokenInstance.checkCredit(marketplaceInstance.address)
+    );
+    let v6 = new BigNumber(
+      await marketplaceInstance.getCurrentFulfillment("Milo")
+    );
 
     assert(v1.isEqualTo(50), "CT quantity is wrong");
     assert(v2.isEqualTo(50), "CT quantity is wrong");
@@ -377,58 +379,120 @@ contract("Marketplace", function (accounts) {
     assert(v4.isEqualTo(48), "CT quantity is wrong");
     assert(v5.isEqualTo(52), "CT quantity is wrong");
     assert(v6.isEqualTo(1), "Fulfillment quantity is wrong");
-  })
+  });
 
-  it("Bid for item (No more quota)", async() => {
+  it("Bid for item (No more quota)", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.bidForItem("Milo", { from: accounts[2] }),
       "No more quota remaining"
     );
-  })
+  });
 
-  it("Bid for item (Not enough CT)", async() => {
+  it("Bid for item (Not enough CT)", async () => {
     await truffleAssert.reverts(
       marketplaceInstance.bidForItem("Cloth", { from: accounts[5] }),
       "Not enough CT"
     );
-  })
+  });
 
-  it("Get items' remaining quota", async() => {
-    let v1 = await marketplaceInstance.getItemsAndRemainingQuota({ from: accounts[1] });
+  it("Bid for multiple items (Want to donate more than needed)", async () => {
+    await truffleAssert.reverts(
+      marketplaceInstance.bidForItemWithQuantity("Cloth", 10, {
+        from: accounts[5],
+      }),
+      "The quota remaining required is less than the amount you would like to donate."
+    );
+  });
+
+  it("Bid for multiple items (Not enough CT)", async () => {
+    await marketplaceInstance.getCT({
+      from: accounts[6],
+      value: oneEth.dividedBy(100),
+    });
+    await truffleAssert.reverts(
+      marketplaceInstance.bidForItemWithQuantity("Cloth", 5, {
+        from: accounts[6],
+      }),
+      "Not enough CT"
+    );
+  });
+
+  it("Bid for multiple items", async () => {
+    await marketplaceInstance.getCT({
+      from: accounts[6],
+      value: oneEth.dividedBy(10),
+    });
+    let v1 = await marketplaceInstance.bidForItemWithQuantity("Cloth", 5, {
+      from: accounts[6],
+    });
+    truffleAssert.eventEmitted(
+      v1,
+      "itemsBidded",
+      (args) => {
+        return (
+          args.itemName == "Cloth" &&
+          args.numberDonated == 5 &&
+          args.remainingQuota == 5
+        );
+      },
+      "The method to donate multiple items is wrong."
+    );
+  });
+
+  it("Get items' remaining quota", async () => {
+    let v1 = await marketplaceInstance.getItemsAndRemainingQuota({
+      from: accounts[1],
+    });
     let itemNames = v1[0];
     let quotaRemaining = v1[1];
     assert.equal(itemNames[0], "Cloth", "Incorrect item name returned");
     assert.equal(itemNames[1], "Milo", "Incorrect item name returned");
-    assert(new BigNumber(quotaRemaining[0]).isEqualTo(10), "Incorrect remaining quota returned");
-    assert(new BigNumber(quotaRemaining[1]).isEqualTo(0), "Incorrect remaining quota returned");
-  })
+    assert(
+      new BigNumber(quotaRemaining[0]).isEqualTo(5),
+      "Incorrect remaining quota returned"
+    );
+    assert(
+      new BigNumber(quotaRemaining[1]).isEqualTo(0),
+      "Incorrect remaining quota returned"
+    );
+  });
 
-  it("Transfer CT to marketplace owner (Not owner)", async() => {
+  it("Transfer CT to marketplace owner (Not owner)", async () => {
     await truffleAssert.reverts(
-      marketplaceInstance.stopBiddingAndTransferCTToOwner({ from: accounts[2] }),
+      marketplaceInstance.stopBiddingAndTransferCTToOwner({
+        from: accounts[2],
+      }),
       "Only the owner of the marketplace contract can call this function"
     );
-  })
+  });
 
-  it("Transfer CT to marketplace owner (Not bidding)", async() => {
+  it("Transfer CT to marketplace owner (Not bidding)", async () => {
     await marketplaceInstance.stop_bidding({ from: accounts[1] });
     await truffleAssert.reverts(
-      marketplaceInstance.stopBiddingAndTransferCTToOwner({ from: accounts[1] }),
+      marketplaceInstance.stopBiddingAndTransferCTToOwner({
+        from: accounts[1],
+      }),
       "Function cannot be called as the marketplace is not opened for bidding"
     );
-  })
+  });
 
-  it("Transfer CT to marketplace owner", async() => {
+  it("Transfer CT to marketplace owner", async () => {
     await marketplaceInstance.start_bidding({ from: accounts[1] });
     let v1 = new BigNumber(await charityTokenInstance.checkCredit(accounts[1]));
-    let v2 = new BigNumber(await charityTokenInstance.checkCredit(marketplaceInstance.address));
-    await marketplaceInstance.stopBiddingAndTransferCTToOwner({ from: accounts[1] });
+    let v2 = new BigNumber(
+      await charityTokenInstance.checkCredit(marketplaceInstance.address)
+    );
+    await marketplaceInstance.stopBiddingAndTransferCTToOwner({
+      from: accounts[1],
+    });
     let v3 = new BigNumber(await charityTokenInstance.checkCredit(accounts[1]));
-    let v4 = new BigNumber(await charityTokenInstance.checkCredit(marketplaceInstance.address));
+    let v4 = new BigNumber(
+      await charityTokenInstance.checkCredit(marketplaceInstance.address)
+    );
 
     assert(v1.isEqualTo(0), "CT quantity is wrong");
-    assert(v2.isEqualTo(52), "CT quantity is wrong");
-    assert(v3.isEqualTo(52), "CT quantity is wrong");
+    assert(v2.isEqualTo(57), "CT quantity is wrong");
+    assert(v3.isEqualTo(57), "CT quantity is wrong");
     assert(v4.isEqualTo(0), "CT quantity is wrong");
-  })
+  });
 });
