@@ -491,8 +491,8 @@ contract("Marketplace", function (accounts) {
     );
 
     assert(v1.isEqualTo(0), "CT quantity is wrong");
-    assert(v2.isEqualTo(53), "CT quantity is wrong");
-    assert(v3.isEqualTo(53), "CT quantity is wrong");
+    assert(v2.isEqualTo(57), "CT quantity is wrong");
+    assert(v3.isEqualTo(57), "CT quantity is wrong");
     assert(v4.isEqualTo(0), "CT quantity is wrong");
   });
 });

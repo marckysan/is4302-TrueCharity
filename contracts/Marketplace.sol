@@ -329,7 +329,7 @@ contract Marketplace {
                 (minDonationAmt * _quantityToDonate),
             "Not enough CT"
         );
-        charityTokenContract.transferCredit(address(this), minDonationAmt);
+        charityTokenContract.transferCredit(address(this), minDonationAmt * _quantityToDonate);
         currentFulfillment[_itemName] =
             currentFulfillment[_itemName] +
             _quantityToDonate;
