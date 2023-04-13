@@ -4,12 +4,14 @@ import "./ERC20.sol";
 
 contract CharityToken {
     ERC20 erc20Contract;
+    uint256 supplyLimit;
     address owner;
 
     constructor() public {
         ERC20 e = new ERC20();
         erc20Contract = e;
         owner = msg.sender;
+        supplyLimit = 1000000000; // billion
     }
 
     /**
@@ -23,6 +25,7 @@ contract CharityToken {
         uint256 weiAmt
     ) public returns (uint256) {
         uint256 amt = weiAmt / 10000000000000000; // Convert weiAmt to Charity Token
+        require(erc20Contract.totalSupply() + amt <= supplyLimit, "CT supply is not enough");
         erc20Contract.mint(recipient, amt);
         return amt;
     }
