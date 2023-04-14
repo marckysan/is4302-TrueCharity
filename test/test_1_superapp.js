@@ -139,7 +139,7 @@ contract("SuperApp", function (accounts) {
     );
   });
 
-  it("Get items list", async () => {
+  it("Get Items List", async () => {
     await superAppInstance.addItem("Chicken", 1);
     await superAppInstance.addItem("Cloth", 3);
     let v1 = await superAppInstance.getItemsList();
@@ -148,12 +148,12 @@ contract("SuperApp", function (accounts) {
     assert.equal(v1[2], "Cloth", "Item lists generated do not match.");
   });
 
-  it("Get items price", async () => {
+  it("Get Item Price", async () => {
     let v1 = await superAppInstance.getItemPrice("Chicken");
     assert.equal(v1, 1, "Item price generated does not match.");
   });
 
-  it("Get items price (Don't exist)", async () => {
+  it("Get Item Price (Don't exist)", async () => {
     truffleAssert.reverts(
       superAppInstance.getItemPrice("Coke"),
       "Item does not exist"
