@@ -140,7 +140,7 @@ contract("Marketplace", function (accounts) {
     let v1 = await marketplaceInstance.setRequiredItemsInfoManual(
       ["Cloth", "Milo"],
       [10, 1],
-      [1, 2],
+      [5, 5],
       {
         from: accounts[1],
       }
@@ -273,7 +273,7 @@ contract("Marketplace", function (accounts) {
       from: accounts[2],
     });
 
-    assert.equal(v1, 2, "Per Unit Donation Amount is wrong");
+    assert.equal(v1, 5, "Per Unit Donation Amount is wrong");
   });
 
   it("Get Item Remaining Quota (Item don't exist)", async () => {
@@ -376,8 +376,8 @@ contract("Marketplace", function (accounts) {
     assert(v1.isEqualTo(50), "CT quantity is wrong");
     assert(v2.isEqualTo(50), "CT quantity is wrong");
     assert(v3.isEqualTo(0), "Fulfillment quantity is wrong");
-    assert(v4.isEqualTo(48), "CT quantity is wrong");
-    assert(v5.isEqualTo(52), "CT quantity is wrong");
+    assert(v4.isEqualTo(45), "CT quantity is wrong");
+    assert(v5.isEqualTo(55), "CT quantity is wrong");
     assert(v6.isEqualTo(1), "Fulfillment quantity is wrong");
   });
 
@@ -420,7 +420,7 @@ contract("Marketplace", function (accounts) {
   it("Bid for Multiple Items", async () => {
     await marketplaceInstance.getCT({
       from: accounts[6],
-      value: oneEth.dividedBy(10),
+      value: oneEth,
     });
     let v1 = await marketplaceInstance.bidForItemWithQuantity("Cloth", 5, {
       from: accounts[6],
@@ -489,10 +489,10 @@ contract("Marketplace", function (accounts) {
     let v4 = new BigNumber(
       await charityTokenInstance.checkCredit(marketplaceInstance.address)
     );
-
+    
     assert(v1.isEqualTo(0), "CT quantity is wrong");
-    assert(v2.isEqualTo(57), "CT quantity is wrong");
-    assert(v3.isEqualTo(57), "CT quantity is wrong");
+    assert(v2.isEqualTo(80), "CT quantity is wrong");
+    assert(v3.isEqualTo(80), "CT quantity is wrong");
     assert(v4.isEqualTo(0), "CT quantity is wrong");
   });
 });
