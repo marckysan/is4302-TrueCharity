@@ -178,6 +178,8 @@ contract Marketplace {
                 )
             );
             itemQuota[itemName] = requiredItemsQuota[i];
+            require(requiredItemsPrices[i] >= superAppContract.getItemPrice(itemName),
+            "Min donation amount cannot be less than the item's original price");
             minDonateAmount[itemName] = requiredItemsPrices[i];
         }
 
@@ -225,6 +227,11 @@ contract Marketplace {
         require(
             minDonateAmount[_itemName] != _newMinDonation,
             "The old and new min donation should not be the same"
+        );
+
+        require(
+            _newMinDonation >= superAppContract.getItemPrice(_itemName),
+            "The new min donation cannot be less than the item's original price"
         );
 
         itemQuota[_itemName] = _newMinDonation;
